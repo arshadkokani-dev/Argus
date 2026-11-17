@@ -7,3 +7,6 @@ alembic==1.14.0
 psycopg2-binary==2.9.10
 httpx==0.28.0
 pytest==8.3.4
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+pyjwt==2.10.1
