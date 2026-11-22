@@ -8,6 +8,8 @@ from app.db.session import get_db
 from app.models.target import Target
 from app.models.user import User
 from app.schemas.target import TargetCreate, TargetResponse
+from app.services.verifier import verify_domain_ownership
+
 
 router = APIRouter(prefix="/api/v1/targets", tags=["Targets"])
 
@@ -81,3 +83,39 @@ def delete_target(
 
     db.delete(target)
     db.commit()
+
+@router.post("/{target_id}/verify", response_model=TargetResponse)
+async def verify_target(
+    target_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    target = (
+        db.query(Target)
+        .filter(Target.id == target_id, Target.user_id == current_user.id)
+        .first()
+    )
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target not found.",
+        )
+
+    if target.is_verified:
+        return target
+
+    verified = await verify_domain_ownership(
+        domain=target.domain,
+        expected_token=target.verification_token,
+        method=target.verification_method,
+    )
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Verification failed. Ensure '{target.verification_token}' is published via {target.verification_method.value}.",
+        )
+
+    target.is_verified = True
+    db.commit()
+    db.refresh(target)
+    return target
